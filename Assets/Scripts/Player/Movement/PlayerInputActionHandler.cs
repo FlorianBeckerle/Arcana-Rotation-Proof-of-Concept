@@ -13,6 +13,10 @@ public class PlayerInputActionHandler : MonoBehaviour
     
     [Header("Stats")]
     //Movement
+    [SerializeField] float groundDecel = 10f; //Ground Slide amount
+    [SerializeField] float landingInertia = 0.85f; // 0..1, how much air direction to keep on landing
+    private bool wasGrounded;
+    
     [SerializeField] private float walkSpeed = 5f;
     [SerializeField] private float sprintSpeed = 9f;
     [SerializeField] private float airStrafeSpeed = 2f;
@@ -43,6 +47,7 @@ public class PlayerInputActionHandler : MonoBehaviour
     private Vector3 velocity;
     [SerializeField] private bool isRunning  = false; 
     [SerializeField] private bool isGrounded = false;
+    [SerializeField] private Vector2 lookDirection; //x left/right -1/1   //y up/down -1/1 
     
     
     
@@ -155,53 +160,67 @@ public class PlayerInputActionHandler : MonoBehaviour
     
     private void HandleMove()
     {
+        bool prevGrounded = wasGrounded;
+
         isGrounded = controller.isGrounded;
 
         if (isGrounded && velocity.y < 0f)
         {
-            velocity.y = -2f;                    
-            storedInput = moveInput;
+            velocity.y = -2f;
+
+            // ease-out on ground
+            storedInput.x = Mathf.Lerp(storedInput.x, moveInput.x, groundDecel * Time.deltaTime);
+            if (Mathf.Abs(storedInput.x) < 0.01f) storedInput.x = 0f;
+
             currentMoveDirection = player.right * storedInput.x;
         }
-
-        if (!isGrounded)
+        else
         {
+            // in air: steer with air control
             Vector3 desiredMoveDirection = (player.right * moveInput.x).normalized;
-            currentMoveDirection = Vector3.Lerp(
-                currentMoveDirection, desiredMoveDirection, airStrafeSpeed * Time.deltaTime);
+            currentMoveDirection = Vector3.Lerp(currentMoveDirection, desiredMoveDirection, airStrafeSpeed * Time.deltaTime);
         }
 
-        // Left Right Movement
-        Vector3 horizDir = isGrounded
-            ? (player.right * storedInput.x).normalized
-            : currentMoveDirection;
-
+        // horizontal move (don’t normalize on ground)
+        Vector3 horizDir = isGrounded ? (player.right * storedInput.x) : currentMoveDirection;
         Vector3 horizMove = horizDir * speed * Time.deltaTime;
         CollisionFlags hFlags = controller.Move(horizMove);
 
-        // if player hits a wall
+        // anti wall-stick
         if ((hFlags & CollisionFlags.Sides) != 0)
         {
             if (Mathf.Sign(horizMove.x) == Mathf.Sign(moveInput.x) && Mathf.Abs(moveInput.x) > 0.01f)
             {
                 currentMoveDirection.x = 0f;
-                storedInput.x = 0f; // remove stored input
+                storedInput.x = 0f;
             }
         }
 
-        // Vertical movement
+        // vertical
         HandleJump();
         CollisionFlags vFlags = controller.Move(velocity * Time.deltaTime);
 
-        // hits ceiling --> fall instantly
-        if ((vFlags & CollisionFlags.Above) != 0 && velocity.y > 0f)
-            velocity.y = 0f;
+        // Ceiling bonk / ground bias
+        if ((vFlags & CollisionFlags.Above) != 0 && velocity.y > 0f) velocity.y = 0f;
+        if ((vFlags & CollisionFlags.Below) != 0 && velocity.y < 0f) velocity.y = -2f;
 
-        // keep on ground even if hits ceiling (at the same time)
-        if ((vFlags & CollisionFlags.Below) != 0 && velocity.y < 0f)
-            velocity.y = -2f;
+        // --- landing inertia: if we just landed, seed storedInput from air direction ---
+        bool justLanded = !prevGrounded && (vFlags & CollisionFlags.Below) != 0;
+        if (justLanded)
+        {
+            // project current air move onto player-right to get a 1D scalar
+            float airScalar = Vector3.Dot(currentMoveDirection, player.right);
+            storedInput.x = Mathf.Lerp(storedInput.x, airScalar, landingInertia);
+            currentMoveDirection = player.right * storedInput.x; // sync
+        }
+
+        // update prev for next frame
+        wasGrounded = isGrounded;
         
         HandleUpDown(moveInput.y);
+        
+        lookDirection.x = moveInput.x;
+        lookDirection.y = moveInput.y;
     }
 
     private void HandleJump()
