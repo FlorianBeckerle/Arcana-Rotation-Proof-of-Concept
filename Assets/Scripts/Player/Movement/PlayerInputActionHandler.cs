@@ -46,8 +46,12 @@ public class PlayerInputActionHandler : MonoBehaviour
     [Header("Input Checks")]
     private Vector3 velocity;
     [SerializeField] private bool isRunning  = false; 
-    [SerializeField] private bool isGrounded = false;
-    [SerializeField] private Vector2 lookDirection; //x left/right -1/1   //y up/down -1/1 
+    [SerializeField] public bool isGrounded = false;
+    [SerializeField] public Vector2 lookDirection; //x left/right -1/1   //y up/down -1/1 
+    public event System.Action PrimaryAttackIntent;
+    
+    private bool facingRight = true; // start facing right
+
     
     
     
@@ -109,8 +113,11 @@ public class PlayerInputActionHandler : MonoBehaviour
     public void OnSimpleAttack(InputValue value)
     {
         if (value.isPressed)
-            Debug.Log("Attacking");
+        {
+            PrimaryAttackIntent?.Invoke();
+        }
     }
+
 
     public void OnMove(InputValue value)
     {
@@ -218,9 +225,33 @@ public class PlayerInputActionHandler : MonoBehaviour
         wasGrounded = isGrounded;
         
         HandleUpDown(moveInput.y);
-        
-        lookDirection.x = moveInput.x;
+        //Save last look direction along the x while resetting y 
+        if(moveInput.x != 0f) lookDirection.x = moveInput.x;
         lookDirection.y = moveInput.y;
+
+        TurnPlayer();
+    }
+
+    private void TurnPlayer()
+    {
+        if (moveInput.x > 0.01f && !facingRight)
+        {
+            facingRight = true;
+            player.localScale = new Vector3(
+                Mathf.Abs(player.localScale.x), 
+                player.localScale.y, 
+                player.localScale.z
+            );
+        }
+        else if (moveInput.x < -0.01f && facingRight)
+        {
+            facingRight = false;
+            player.localScale = new Vector3(
+                -Mathf.Abs(player.localScale.x), 
+                player.localScale.y, 
+                player.localScale.z
+            );
+        }
     }
 
     private void HandleJump()

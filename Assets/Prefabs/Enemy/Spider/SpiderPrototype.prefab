@@ -907,11 +907,14 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8915490512946721520}
+  - component: {fileID: 3323215777002105997}
   - component: {fileID: 2162032004866273162}
   - component: {fileID: 7061530646314023944}
   - component: {fileID: 479183116446343648}
   - component: {fileID: 8322976062581665893}
   - component: {fileID: 8171099836017513199}
+  - component: {fileID: 5462600527501246643}
+  - component: {fileID: 4048668670473238808}
   - component: {fileID: 6079030061511183892}
   m_Layer: 0
   m_Name: SpiderPrototype
@@ -940,6 +943,35 @@ Transform:
   - {fileID: 3945209875293764897}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &3323215777002105997
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4037197237573816533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee50c022a5278424781ccdb082da394b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 1
+  maxHealth: 100
+  startingHealth: 100
+  invulnerable: 0
+  damageSfx: {fileID: 0}
+  deathSfx: {fileID: 0}
+  sfxVolume: 1
+  enemyStats: {fileID: 11400000, guid: 09f027bf31a399149b155a787f31cdbc, type: 2}
+  currencyOnDeath: 0
+  shatteredPrefab: {fileID: 0}
+  OnDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDied:
+    m_PersistentCalls:
+      m_Calls: []
+  currentHealth: 0
 --- !u!114 &2162032004866273162
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1096,7 +1128,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4037197237573816533}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7357aefada202d543b2221718a9e84e2, type: 3}
   m_Name: 
@@ -1106,7 +1138,8 @@ MonoBehaviour:
   agent: {fileID: 6079030061511183892}
   obstructionMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 55
+  debugGizmo: {fileID: 0}
 --- !u!114 &8171099836017513199
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1114,16 +1147,53 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4037197237573816533}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3e1eaa43a02145e45968c64a558988fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  stepDistance: 14
-  arrivalTolerance: 0.2
+  checkDistance: 1
+  floorCheckDepth: 2
   repathDelay: 0.5
-  navSampleRange: 2
   patrolSpeedMul: 0.7
+  turnSpeedDeg: 90
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 55
+  groundMask:
+    serializedVersion: 2
+    m_Bits: 55
+--- !u!114 &5462600527501246643
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4037197237573816533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f5f9939a8ba65646a7a71f3d0efbfd6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  arrowColor: {r: 0, g: 1, b: 1, a: 1}
+  arrowLength: 2
+  arrowHeadSize: 0.3
+  moveDir: {x: 0, y: 0, z: 0}
+--- !u!114 &4048668670473238808
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4037197237573816533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59d09a77bd7285749afb082501add972, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  repathInterval: 0.15
+  stopDistance: 0.5
+  turnSpeedDeg: 110
 --- !u!195 &6079030061511183892
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -1143,7 +1213,7 @@ NavMeshAgent:
   m_AutoBraking: 0
   m_AutoRepath: 1
   m_Height: 2
-  m_BaseOffset: 0
+  m_BaseOffset: -0.02
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
 --- !u!1 &4561244114193639915

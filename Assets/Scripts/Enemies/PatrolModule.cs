@@ -7,15 +7,21 @@ public class PatrolModule : MonoBehaviour, IEnemyModule
     private EnemyContext c;
 
     [Header("Patrol Settings")]
-    [SerializeField] private float stepDistance = 4f;        // distance per leg
-    [SerializeField] private float arrivalTolerance = 0.4f;  // consider arrived when <= this
-    [SerializeField] private float repathDelay = 0.5f;       // cooldown between new targets
-    [SerializeField] private float navSampleRange = 2f;      // how far to search around desired
-    [SerializeField] private float patrolSpeedMul = 0.7f;    // % of stats.moveSpeed
+    [SerializeField] private float checkDistance = 1f;     // How far ahead to check for wall/gap
+    [SerializeField] private float floorCheckDepth = 2f;   // How far down to check for floor
+    [SerializeField] private float repathDelay = 0.2f;     // Delay before picking new direction after turn
+    [SerializeField] private float patrolSpeedMul = 0.7f;
+
+    [Header("Turning")]
+    [SerializeField] private float turnSpeedDeg = 360f;
+
+    [Header("Layer Masks")]
+    [SerializeField] private LayerMask obstacleMask;
+    [SerializeField] private LayerMask groundMask;
 
     private float repathTimer;
-    private int dir = 1;                                     // +1 right / -1 left
-    private Vector3 currentDest;
+    private Vector3 moveDir = Vector3.right; // Default direction
+    private bool useSideView;
 
     public void Init(EnemyContext ctx)
     {
@@ -25,74 +31,102 @@ public class PatrolModule : MonoBehaviour, IEnemyModule
         {
             c.agent.speed = c.stats.moveSpeed * patrolSpeedMul;
             c.agent.acceleration = Mathf.Max(8f, c.agent.speed * 10f);
-            c.agent.autoBraking = false;     // prevents stop-go stutter
-            c.agent.updateRotation = false;  // we flip scale for facing
+            c.agent.autoBraking = false;
+            c.agent.updateRotation = false;
             c.agent.stoppingDistance = 0f;
         }
+
+        // Check world mode from WorldManager
+        useSideView = WorldManager.Instance != null && WorldManager.Instance.In2DMode;
     }
 
-    // Small baseline so it runs unless a higher-priority module (e.g., Chase/Attack) wins
     public float Score() => c.hasLOS() ? 0.1f : 0.5f;
 
     public void Tick()
     {
         if (c.agent == null || !c.agent.isOnNavMesh) return;
-
-        // Face movement (flip local scale X)
-        var v = c.agent.velocity;
-        if (Mathf.Abs(v.x) > 0.01f)
+        
+        // If Chase left a path or stopped the agent, clear it so Move() works.
+        if (c.agent.hasPath || c.agent.isStopped)
         {
-            var s = c.self.localScale;
-            s.x = Mathf.Abs(s.x) * Mathf.Sign(v.x);
-            c.self.localScale = s;
+            c.agent.ResetPath();
+            c.agent.isStopped = false;
         }
 
-        if (repathTimer > 0f) repathTimer -= Time.deltaTime;
-
-        // If idle/no path or arrived → pick a new step
-        if ((!c.agent.hasPath && !c.agent.pathPending) ||
-            (c.agent.remainingDistance <= arrivalTolerance))
+        if (repathTimer > 0f)
         {
-            if (repathTimer <= 0f)
-            {
-                PickNextTarget();
-                repathTimer = repathDelay;
-            }
+            repathTimer -= Time.deltaTime;
             return;
         }
 
-        // If path went invalid while moving, recover
-        if (c.agent.pathStatus != NavMeshPathStatus.PathComplete && repathTimer <= 0f)
+        // --- NavMesh edge check (pre-move) ---
+        if (EdgeAheadOnNavMesh(c.agent.nextPosition, moveDir, checkDistance))
         {
-            PickNextTarget();
-            repathTimer = repathDelay;
+            ReverseDirection();
+            return; // wait one frame after flipping
         }
-    }
 
-    private void PickNextTarget()
-    {
-        // Alternate simple left/right pacing
-        dir = -dir;
+        // Keep moving in chosen direction
+        c.agent.Move(moveDir.normalized * c.agent.speed * Time.deltaTime);
 
-        Vector3 desired = c.self.position + Vector3.right * dir * stepDistance;
-
-        if (NavMesh.SamplePosition(desired, out var hit, navSampleRange, NavMesh.AllAreas))
+        // Rotate toward movement
+        if (moveDir.sqrMagnitude > 0.0001f)
         {
-            currentDest = hit.position;
-            if (c.agent.isOnNavMesh)
-                c.agent.SetDestination(currentDest);
+            var targetRot = Quaternion.LookRotation(new Vector3(moveDir.x, 0f, moveDir.z), Vector3.up);
+            c.self.rotation = Quaternion.RotateTowards(c.self.rotation, targetRot, turnSpeedDeg * Time.deltaTime);
+        }
+
+        // Obstacle ahead?
+        if (Physics.Raycast(c.self.position + Vector3.up * c.stats.eyeHeight, moveDir, checkDistance, obstacleMask))
+        {
+            ReverseDirection();
         }
         else
         {
-            // If we can't find a point this way, try the other way immediately
-            desired = c.self.position + Vector3.right * (-dir) * stepDistance;
-            if (NavMesh.SamplePosition(desired, out hit, navSampleRange, NavMesh.AllAreas))
+            // Floor check (for side-view mode)
+            if (!HasFloorAhead())
             {
-                dir = -dir; // commit to the flip
-                currentDest = hit.position;
-                if (c.agent.isOnNavMesh)
-                    c.agent.SetDestination(currentDest);
+                ReverseDirection();
             }
         }
+        
+        //Proc Anim --> not needed
+        //c.animator?.Play("Walk");
     }
+
+
+    private void ReverseDirection()
+    {
+        moveDir = -moveDir;
+        repathTimer = repathDelay;
+    }
+
+    private bool HasFloorAhead()
+    {
+        Vector3 forwardPos = c.self.position + moveDir * checkDistance;
+        Vector3 downDir = Vector3.down;
+
+        if (useSideView)
+        {
+            // Lock Z for side view so raycast is 2D-like
+            forwardPos.z = c.self.position.z;
+        }
+
+        return Physics.Raycast(forwardPos, downDir, floorCheckDepth, groundMask);
+    }
+    
+    private bool EdgeAheadOnNavMesh(Vector3 origin, Vector3 dir, float distance)
+    {
+        // Probe a short segment ahead on the navmesh.
+        // If NavMesh.Raycast returns true, movement from A->B hits an edge.
+        var start = origin;
+        var end   = origin + dir.normalized * distance;
+
+        // Make sure start/end are on/near the mesh so the raycast works reliably
+        if (!NavMesh.SamplePosition(start, out var sHit, 0.3f, NavMesh.AllAreas)) return false;
+        if (!NavMesh.SamplePosition(end,   out var eHit, 0.3f, NavMesh.AllAreas)) return true; // end is off-mesh ⇒ edge
+
+        return NavMesh.Raycast(sHit.position, eHit.position, out _, NavMesh.AllAreas);
+    }
+
 }

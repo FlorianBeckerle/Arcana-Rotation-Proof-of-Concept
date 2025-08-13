@@ -12,6 +12,7 @@ public class EnemyCore : MonoBehaviour
     [SerializeField] private Transform player;
     [SerializeField] private NavMeshAgent agent;
     [SerializeField] private LayerMask obstructionMask;
+    [SerializeField] private EnemyDebugGizmo debugGizmo;
 
     private readonly List<IEnemyModule> modules = new();
     private EnemyContext ctx;
@@ -20,6 +21,7 @@ public class EnemyCore : MonoBehaviour
     void Awake()
     {
         if (agent == null) agent = GetComponent<NavMeshAgent>();
+        if (debugGizmo == null) debugGizmo = GetComponent<EnemyDebugGizmo>();
 
         ctx = new EnemyContext
         {
@@ -59,7 +61,9 @@ public class EnemyCore : MonoBehaviour
 
         // Utility/priority select: highest score wins this frame
         active = modules.OrderByDescending(m => m.Score()).FirstOrDefault();
+        Debug.Log($"[EnemyCore] Active module: {(active != null ? active.GetType().Name : "None")}");
         active?.Tick();
+        if(debugGizmo != null) debugGizmo.moveDir = agent.desiredVelocity;
     }
 
     private IEnumerator PlaceAgentOnNavMeshOnce()
